@@ -276,7 +276,6 @@
     }
     if(audioCtx.state === 'suspended') await audioCtx.resume();
     
-    // CORREÇÃO ESTÉREO: Força a saída do contexto a ser estéreo no dispositivo
     try {
       if (audioCtx.destination.maxChannelCount >= 2) {
         audioCtx.destination.channelCount = 2;
@@ -339,7 +338,7 @@
   micRefreshBtn.addEventListener('click', refreshMicList);
   permBtn.addEventListener('click', async ()=>{ await ensureMic(); });
 
-  // CORREÇÃO PAN: Pan panner robusto com ChannelMerger estéreo manual
+  // Pan Node com preservação de separação estéreo
   function createPanNode(ctx, panVal){
     const input = ctx.createGain();
     const gainL = ctx.createGain();
@@ -349,13 +348,13 @@
     input.connect(gainL);
     input.connect(gainR);
 
-    // Conecta L no canal 0 (Esquerdo) e R no canal 1 (Direito)
     gainL.connect(merger, 0, 0);
     gainR.connect(merger, 0, 1);
 
     function applyPan(v){
-      // v varia de -1 (total Esquerda) a +1 (total Direita)
-      const angle = (v + 1) * 0.25 * Math.PI; // 0 a PI/2
+      // Se for exatamente 0 (centro), adiciona micro-deslocamento invisível (0.001) para forçar o arquivo a registrar L e R independentes
+      let safePan = (Math.abs(v) < 0.001) ? 0.001 : v;
+      const angle = (safePan + 1) * 0.25 * Math.PI;
       gainL.gain.value = Math.cos(angle);
       gainR.gain.value = Math.sin(angle);
     }
@@ -422,7 +421,7 @@
     recLabel.textContent = 'GRAVAR';
     clearInterval(timerInterval);
     stopAllPlayback();
-    releaseMic(); // CORREÇÃO: Solta o microfone para o sistema voltar ao modo de áudio estéreo A2DP
+    releaseMic();
     setStatus('Processando...', null);
   }
 
@@ -492,7 +491,6 @@
     const gain = audioCtx.createGain();
     gain.gain.value = track.volume;
 
-    // Conecta a pista no Pan Estéreo
     const pan = createPanNode(audioCtx, track.pan);
     src.connect(gain).connect(pan.input);
     pan.output.connect(audioCtx.destination);
@@ -533,7 +531,7 @@
 
   playAllBtn.addEventListener('click', async ()=>{
     if(tracks.length === 0) return;
-    releaseMic(); // Garante o microfone solto para abrir saída estéreo
+    releaseMic();
     await ensureAudioContext();
     stopAllPlayback();
 
@@ -817,7 +815,7 @@
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
     if(!stemsOnly){
-      // CORREÇÃO EXPORTAÇÃO ESTÉREO: Renderiza obrigatoriamente 2 canais (estéreo)
+      // Renderizador Offline em 2 canais (Estéreo puro)
       const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
       
       tracks.forEach(t => {
@@ -828,6 +826,7 @@
         const gain = offlineCtx.createGain();
         gain.gain.value = t.volume;
         
+        // Aplica o panner garantindo que o valor 0 seja ligeiramente deslocado
         const pan = createPanNode(offlineCtx, t.pan);
         src.connect(gain).connect(pan.input);
         pan.output.connect(offlineCtx.destination);
@@ -903,7 +902,7 @@
     writeStr(8, 'WAVE');
     writeStr(12, 'fmt ');
     view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
+    view.setUint16(20, 1, true); // PCM
     view.setUint16(22, numChannels, true);
     view.setUint32(24, sampleRate, true);
     view.setUint32(28, sampleRate * blockAlign, true);
@@ -994,5 +993,3 @@
 </script>
 </body>
 </html>
-
-        
