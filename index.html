@@ -93,16 +93,17 @@
   .val-label{color:var(--muted); font-size:11px; width:36px; text-align:right;}
 
   .nudge-row{
-    display:flex; align-items:center; justify-content:space-between; background:var(--card2);
-    padding:4px 8px; border-radius:8px; border:1px solid var(--border); margin-top:2px;
+    display:flex; flex-direction:column; gap:4px; background:var(--card2);
+    padding:6px 8px; border-radius:8px; border:1px solid var(--border); margin-top:2px;
   }
-  .nudge-row label{font-size:11.5px; color:var(--muted);}
-  .nudge-controls{display:flex; align-items:center; gap:4px;}
+  .nudge-top{display:flex; align-items:center; justify-content:space-between;}
+  .nudge-top label{font-size:11.5px; color:var(--muted);}
+  .nudge-controls{display:flex; align-items:center; gap:4px; justify-content:center; margin-top:2px;}
   .nudge-btn{
-    padding:2px 6px; border-radius:4px; border:1px solid var(--border);
-    background:var(--card); color:var(--text); font-size:11px; cursor:pointer;
+    padding:3px 8px; border-radius:4px; border:1px solid var(--border);
+    background:var(--card); color:var(--text); font-size:11px; cursor:pointer; font-weight:600;
   }
-  .nudge-val{width:45px; text-align:center; background:transparent; border:none; color:var(--text); font-size:11px;}
+  .nudge-val{width:55px; text-align:center; background:var(--card); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:11px; padding:2px;}
 
   .export-row{display:flex; gap:8px; width:100%; max-width:500px; margin:12px auto 0;}
   .export-btn{
@@ -206,7 +207,7 @@
     <label style="font-size:12px;">Compensação global</label>
     <div style="font-size:12px; color:var(--muted);" id="offsetVal">0 ms</div>
   </div>
-  <input type="range" id="offsetSlider" min="-300" max="300" value="0" step="5" style="width:100%; accent-color:var(--accent2);">
+  <input type="range" id="offsetSlider" min="-1000" max="1000" value="0" step="10" style="width:100%; accent-color:var(--accent2);">
   <button id="calBtn" class="cal-btn">🎧 Calibrar automaticamente</button>
   <div class="cal-result" id="calResult">Use fones para evitar captar o som da caixa do celular.</div>
 </div>
@@ -280,7 +281,6 @@
   async function ensureMic(){
     if(mediaStream) return mediaStream;
     try{
-      // CORREÇÃO DE ÁUDIO: Filtros desativados para evitar supressão e compressão
       const audioConstraints = { 
         echoCancellation: false, 
         noiseSuppression: false, 
@@ -361,8 +361,6 @@
       const stream = await ensureMic();
 
       chunks = [];
-      
-      // CORREÇÃO DE ÁUDIO: Bitrate elevado para 256kbps sem compressão agressiva
       const options = { audioBitsPerSecond: 256000 };
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         options.mimeType = 'audio/webm;codecs=opus';
@@ -391,7 +389,7 @@
         updateRecordingPlayhead(elapsed);
       }, 50);
 
-      setStatus('Gravando com alta fidelidade...', null);
+      setStatus('Gravando...', null);
     }catch(err){
       console.error(err);
       isRecording = false;
@@ -417,7 +415,6 @@
       const arrBuf = await blob.arrayBuffer();
       const audioBuffer = await audioCtx.decodeAudioData(arrBuf);
 
-      // CORREÇÃO DE ÁUDIO: Normalização de ganho suave (0.85) para prevenir clipping digital de vozes altas
       const data = audioBuffer.getChannelData(0);
       let maxPeak = 0;
       for(let i=0; i<data.length; i++) {
@@ -445,7 +442,7 @@
       };
       tracks.push(track);
       renderTracks();
-      setStatus('Pista gravada com sucesso!', 2000);
+      setStatus('Pista gravada!', 2000);
     }catch(err){
       console.error(err);
       setStatus('Erro ao processar gravação.', 3000);
@@ -460,6 +457,20 @@
 
   function playTrack(track, when){
     if(track.muted) return;
+
+    const offsetSec = track.offsetMs / 1000;
+    let startAtCtxTime = when;
+    let bufferOffsetSec = 0;
+
+    if (offsetSec >= 0) {
+      // Deslocamento positivo: adia o início da reprodução
+      startAtCtxTime = when + offsetSec;
+    } else {
+      // Deslocamento negativo: pula o início do áudio (adianta a pista)
+      bufferOffsetSec = Math.abs(offsetSec);
+      if (bufferOffsetSec >= track.buffer.duration) return; // Se adiantou mais que a própria duração
+    }
+
     const src = audioCtx.createBufferSource();
     src.buffer = track.buffer;
 
@@ -470,8 +481,11 @@
     src.connect(gain).connect(pan.input);
     pan.output.connect(audioCtx.destination);
 
-    const startDelay = Math.max(0, track.offsetMs / 1000);
-    src.start(when + startDelay);
+    if (bufferOffsetSec > 0) {
+      src.start(startAtCtxTime, bufferOffsetSec);
+    } else {
+      src.start(startAtCtxTime);
+    }
     
     track.source = src;
     track.gainNode = gain;
@@ -547,7 +561,7 @@
     emptyMsg.style.display = tracks.length ? 'none' : 'block';
     maxProjectDuration = calculateMaxDuration();
 
-    tracks.forEach((track, idx)=>{
+    tracks.forEach((track)=>{
       const el = document.createElement('div');
       el.className = 'track';
       
@@ -585,11 +599,15 @@
         </div>
 
         <div class="nudge-row">
-          <label>Ajuste de Tempo (Deslocamento):</label>
+          <div class="nudge-top">
+            <label>Ajuste Fino de Latência (Tempo):</label>
+            <input type="number" class="nudge-val" value="${track.offsetMs}" step="5">
+          </div>
           <div class="nudge-controls">
-            <button class="nudge-btn nudge-less">◀ -10ms</button>
-            <input type="number" class="nudge-val" value="${track.offsetMs}" step="5"> ms
-            <button class="nudge-btn nudge-more">+10ms ▶</button>
+            <button class="nudge-btn nudge-m50">◀ -50ms</button>
+            <button class="nudge-btn nudge-m10">◀ -10ms</button>
+            <button class="nudge-btn nudge-p10">+10ms ▶</button>
+            <button class="nudge-btn nudge-p50">+50ms ▶</button>
           </div>
         </div>
       `;
@@ -621,14 +639,16 @@
       });
 
       const nudgeInput = el.querySelector('.nudge-val');
-      const updateNudge = (val) => {
-        track.offsetMs = parseInt(val, 10) || 0;
+      const setNudge = (newVal) => {
+        track.offsetMs = parseInt(newVal, 10) || 0;
         nudgeInput.value = track.offsetMs;
-        renderTracks();
       };
-      el.querySelector('.nudge-less').addEventListener('click', ()=> updateNudge(track.offsetMs - 10));
-      el.querySelector('.nudge-more').addEventListener('click', ()=> updateNudge(track.offsetMs + 10));
-      nudgeInput.addEventListener('change', (e)=> updateNudge(e.target.value));
+
+      el.querySelector('.nudge-m50').addEventListener('click', ()=> setNudge(track.offsetMs - 50));
+      el.querySelector('.nudge-m10').addEventListener('click', ()=> setNudge(track.offsetMs - 10));
+      el.querySelector('.nudge-p10').addEventListener('click', ()=> setNudge(track.offsetMs + 10));
+      el.querySelector('.nudge-p50').addEventListener('click', ()=> setNudge(track.offsetMs + 50));
+      nudgeInput.addEventListener('change', (e)=> setNudge(e.target.value));
 
       trackListEl.appendChild(el);
       drawWaveform(track, `canvas-${track.id}`);
@@ -790,7 +810,13 @@
         const pan = createPanNode(offlineCtx, t.pan);
         src.connect(gain).connect(pan.input);
         pan.output.connect(offlineCtx.destination);
-        src.start(Math.max(0, t.offsetMs/1000));
+        
+        const offsetSec = t.offsetMs / 1000;
+        if(offsetSec >= 0){
+          src.start(offsetSec);
+        } else {
+          src.start(0, Math.abs(offsetSec));
+        }
       });
       const rendered = await offlineCtx.startRendering();
       downloadWav(audioBufferToWav(rendered), `mixagem-${Date.now()}.wav`);
@@ -815,7 +841,13 @@
 
     src.connect(gain).connect(pan.input);
     pan.output.connect(offlineCtx.destination);
-    src.start(Math.max(0, track.offsetMs/1000));
+    
+    const offsetSec = track.offsetMs / 1000;
+    if(offsetSec >= 0){
+      src.start(offsetSec);
+    } else {
+      src.start(0, Math.abs(offsetSec));
+    }
 
     const rendered = await offlineCtx.startRendering();
     downloadWav(audioBufferToWav(rendered), `${track.name.toLowerCase().replace(/\s+/g,'-')}.wav`);
@@ -924,7 +956,7 @@
 
       const detectedSec = maxIdx / decoded.sampleRate;
       const estimatedLatencyMs = Math.max(0, Math.round((detectedSec - 0.1) * 1000));
-      latencyOffsetMs = Math.min(300, Math.max(-300, estimatedLatencyMs));
+      latencyOffsetMs = Math.min(1000, Math.max(-1000, estimatedLatencyMs));
       offsetSlider.value = latencyOffsetMs;
       offsetVal.textContent = latencyOffsetMs + ' ms';
       calResult.textContent = `Latência detectada: ~${estimatedLatencyMs} ms.`;
