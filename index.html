@@ -275,6 +275,15 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     }
     if(audioCtx.state === 'suspended') await audioCtx.resume();
+    
+    // CORREÇÃO ESTÉREO: Força a saída do contexto a ser estéreo no dispositivo
+    try {
+      if (audioCtx.destination.maxChannelCount >= 2) {
+        audioCtx.destination.channelCount = 2;
+        audioCtx.destination.channelCountMode = 'explicit';
+        audioCtx.destination.channelInterpretation = 'speakers';
+      }
+    } catch(e){}
     return audioCtx;
   }
 
@@ -330,26 +339,34 @@
   micRefreshBtn.addEventListener('click', refreshMicList);
   permBtn.addEventListener('click', async ()=>{ await ensureMic(); });
 
+  // CORREÇÃO PAN: Pan panner robusto com ChannelMerger estéreo manual
   function createPanNode(ctx, panVal){
-    if(ctx.createStereoPanner){
-      const panner = ctx.createStereoPanner();
-      panner.pan.value = panVal || 0;
-      return { input: panner, output: panner, set pan(v){ panner.pan.value = v; } };
-    }else{
-      const input = ctx.createGain();
-      const gainL = ctx.createGain();
-      const gainR = ctx.createGain();
-      const merger = ctx.createChannelMerger(2);
-      input.connect(gainL); input.connect(gainR);
-      gainL.connect(merger, 0, 0); gainR.connect(merger, 0, 1);
-      function apply(v){
-        const angle = (v + 1) * 0.25 * Math.PI;
-        gainL.gain.value = Math.cos(angle);
-        gainR.gain.value = Math.sin(angle);
-      }
-      apply(panVal || 0);
-      return { input, output: merger, set pan(v){ apply(v); } };
+    const input = ctx.createGain();
+    const gainL = ctx.createGain();
+    const gainR = ctx.createGain();
+    const merger = ctx.createChannelMerger(2);
+
+    input.connect(gainL);
+    input.connect(gainR);
+
+    // Conecta L no canal 0 (Esquerdo) e R no canal 1 (Direito)
+    gainL.connect(merger, 0, 0);
+    gainR.connect(merger, 0, 1);
+
+    function applyPan(v){
+      // v varia de -1 (total Esquerda) a +1 (total Direita)
+      const angle = (v + 1) * 0.25 * Math.PI; // 0 a PI/2
+      gainL.gain.value = Math.cos(angle);
+      gainR.gain.value = Math.sin(angle);
     }
+
+    applyPan(panVal || 0);
+
+    return {
+      input,
+      output: merger,
+      set pan(v){ applyPan(v); }
+    };
   }
 
   // ---------- Gravação ----------
@@ -405,7 +422,7 @@
     recLabel.textContent = 'GRAVAR';
     clearInterval(timerInterval);
     stopAllPlayback();
-    releaseMic();
+    releaseMic(); // CORREÇÃO: Solta o microfone para o sistema voltar ao modo de áudio estéreo A2DP
     setStatus('Processando...', null);
   }
 
@@ -463,12 +480,10 @@
     let bufferOffsetSec = 0;
 
     if (offsetSec >= 0) {
-      // Deslocamento positivo: adia o início da reprodução
       startAtCtxTime = when + offsetSec;
     } else {
-      // Deslocamento negativo: pula o início do áudio (adianta a pista)
       bufferOffsetSec = Math.abs(offsetSec);
-      if (bufferOffsetSec >= track.buffer.duration) return; // Se adiantou mais que a própria duração
+      if (bufferOffsetSec >= track.buffer.duration) return;
     }
 
     const src = audioCtx.createBufferSource();
@@ -477,6 +492,7 @@
     const gain = audioCtx.createGain();
     gain.gain.value = track.volume;
 
+    // Conecta a pista no Pan Estéreo
     const pan = createPanNode(audioCtx, track.pan);
     src.connect(gain).connect(pan.input);
     pan.output.connect(audioCtx.destination);
@@ -505,7 +521,7 @@
 
   function stopAllPlayback(){
     tracks.forEach(t=>{
-      if(t.source){ try{ t.source.stop(); }catch(e){} t.source = null; }
+      if(t.source){ try{ t.source.stop(); t.source.disconnect(); }catch(e){} t.source = null; }
       t.playing = false;
     });
     isPlayingAll = false;
@@ -517,6 +533,7 @@
 
   playAllBtn.addEventListener('click', async ()=>{
     if(tracks.length === 0) return;
+    releaseMic(); // Garante o microfone solto para abrir saída estéreo
     await ensureAudioContext();
     stopAllPlayback();
 
@@ -800,13 +817,17 @@
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
     if(!stemsOnly){
+      // CORREÇÃO EXPORTAÇÃO ESTÉREO: Renderiza obrigatoriamente 2 canais (estéreo)
       const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+      
       tracks.forEach(t => {
         if(t.muted) return;
         const src = offlineCtx.createBufferSource();
         src.buffer = t.buffer;
+        
         const gain = offlineCtx.createGain();
         gain.gain.value = t.volume;
+        
         const pan = createPanNode(offlineCtx, t.pan);
         src.connect(gain).connect(pan.input);
         pan.output.connect(offlineCtx.destination);
@@ -818,6 +839,7 @@
           src.start(0, Math.abs(offsetSec));
         }
       });
+
       const rendered = await offlineCtx.startRendering();
       downloadWav(audioBufferToWav(rendered), `mixagem-${Date.now()}.wav`);
     } else {
@@ -972,3 +994,5 @@
 </script>
 </body>
 </html>
+
+        
