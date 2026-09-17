@@ -21,8 +21,8 @@
     overscroll-behavior: none; width: 100vw; height: 100vh; overflow: hidden;
   }
 
-  /* FORÇAR ROTAÇÃO FÍSICA PARA MODO PAISAGEM SE O CELULAR ESTIVER EM PÉ */
-  @media screen and (orientation: portrait) {
+  /* FORÇAR ROTAÇÃO FÍSICA PARA MODO PAISAGEM APENAS EM DISPOSITIVOS MÓVEIS EM PÉ */
+  @media screen and (orientation: portrait) and (max-width: 900px) {
     body {
       position: absolute;
       width: 100vh !important;
@@ -48,7 +48,7 @@
 
   .transport-bar { display: flex; align-items: center; gap: 4px; width: 100%; justify-content: space-between; }
   .mic-select-row { display: flex; align-items: center; gap: 2px; }
-  .mic-select-row select { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; max-width: 100px; }
+  .mic-select-row select { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; max-width: 140px; }
   .mic-refresh-btn { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; cursor: pointer; }
 
   .rec-btn {
@@ -79,7 +79,7 @@
   }
   .playhead-line.recording-line { background: var(--accent); box-shadow: 0 0 6px rgba(255,84,112,0.8); }
 
-  /* Pistas Ajustadas para 68px de Altura */
+  /* Pistas Ajustadas */
   .track {
     display: grid; grid-template-columns: 210px 1fr; background: var(--card);
     border-radius: 4px; overflow: hidden; height: 68px;
@@ -112,7 +112,7 @@
   .nudge-btn { padding: 1px 4px; border-radius: 2px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 8.5px; cursor: pointer; height: 16px; line-height: 1; }
   .nudge-val { width: 34px; text-align: center; background: var(--card2); border: 1px solid var(--border); border-radius: 2px; color: var(--text); font-size: 8.5px; padding: 0; height: 16px; }
 
-  /* Área da Onda (Encostada na Direita) */
+  /* Área da Onda */
   .waveform-wrapper {
     width: 100%; height: 100%; background: #12141a; position: relative; overflow: hidden; display: flex; align-items: center;
   }
@@ -134,8 +134,8 @@
   <div class="transport-bar">
     <h1>🎙️ Looper</h1>
     <div class="mic-select-row">
-      <select id="micSelect"><option value="">Mic Padrão</option></select>
-      <button id="micRefreshBtn" class="mic-refresh-btn" title="Atualizar">🔄</button>
+      <select id="micSelect"><option value="">Detectando microfone...</option></select>
+      <button id="micRefreshBtn" class="mic-refresh-btn" title="Atualizar Dispositivos">🔄</button>
     </div>
     <button id="recBtn" class="rec-btn">⏺ <span id="recLabel">REC</span></button>
     <div class="timer" id="timer">00:00</div>
@@ -159,8 +159,8 @@
 </header>
 
 <div id="permBox" class="perm" style="display:none;">
-  Permissão de microfone necessária.
-  <button id="permBtn">Permitir</button>
+  Permissão ou dispositivo de microfone não encontrado.
+  <button id="permBtn">Tentar Novamente</button>
   <div id="permInstructions" style="margin-top:2px; font-size:10px; color:#ff9a9a;"></div>
 </div>
 
@@ -249,21 +249,31 @@
 
   async function ensureMic(){
     if(mediaStream) return mediaStream;
-    try{
-      const audioConstraints = { 
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-        channelCount: 1, sampleRate: 48000
-      };
-      if(selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-      permBox.style.display = 'none';
-      refreshMicList();
-      return mediaStream;
-    }catch(err){
-      permBox.style.display = 'block';
-      permInstructions.textContent = 'Erro ao acessar microfone: ' + (err.message || err);
-      throw err;
+    
+    // Tenta primeiro com configurações otimizadas
+    let constraints = { 
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      channelCount: 1
+    };
+    if(selectedMicId) constraints.deviceId = { exact: selectedMicId };
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+    } catch(err1) {
+      // Fallback para PC: tenta acessar o áudio básico do sistema
+      try {
+        const basicConstraints = selectedMicId ? { audio: { deviceId: { exact: selectedMicId } } } : { audio: true };
+        mediaStream = await navigator.mediaDevices.getUserMedia(basicConstraints);
+      } catch(err2) {
+        permBox.style.display = 'block';
+        permInstructions.textContent = 'Nenhum microfone encontrado no PC ou permissão negada.';
+        throw err2;
+      }
     }
+
+    permBox.style.display = 'none';
+    refreshMicList();
+    return mediaStream;
   }
 
   function releaseMic(){
@@ -275,22 +285,44 @@
 
   async function refreshMicList(){
     try{
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        micSelect.innerHTML = '<option value="">Mic Padrão</option>';
+        return;
+      }
+
       const devices = await navigator.mediaDevices.enumerateDevices();
       const mics = devices.filter(d => d.kind === 'audioinput');
       const prevValue = micSelect.value;
-      micSelect.innerHTML = '<option value="">Mic Padrão</option>';
+
+      micSelect.innerHTML = '';
+      if(mics.length === 0){
+        micSelect.innerHTML = '<option value="">Sem Mic Conectado</option>';
+        return;
+      }
+
       mics.forEach((d, i)=>{
         const opt = document.createElement('option');
         opt.value = d.deviceId;
-        opt.textContent = d.label || ('Mic ' + (i+1));
+        opt.textContent = d.label || ('Microfone ' + (i+1));
         micSelect.appendChild(opt);
       });
-      if([...micSelect.options].some(o=>o.value === prevValue)) micSelect.value = prevValue;
-    }catch(e){}
+
+      if([...micSelect.options].some(o=>o.value === prevValue)) {
+        micSelect.value = prevValue;
+      } else {
+        selectedMicId = micSelect.value;
+      }
+    }catch(e){
+      micSelect.innerHTML = '<option value="">Mic Padrão</option>';
+    }
   }
 
   micSelect.addEventListener('change', ()=>{ selectedMicId = micSelect.value; releaseMic(); });
-  micRefreshBtn.addEventListener('click', refreshMicList);
+  micRefreshBtn.addEventListener('click', async ()=>{
+    releaseMic();
+    try { await ensureMic(); } catch(e){}
+    await refreshMicList();
+  });
   permBtn.addEventListener('click', async ()=>{ await ensureMic(); });
 
   function createPanNode(ctx, panVal){
@@ -321,9 +353,13 @@
       const stream = await ensureMic();
 
       chunks = [];
-      const options = { audioBitsPerSecond: 256000 };
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        options.mimeType = 'audio/webm;codecs=opus';
+      let options = {};
+      if (typeof MediaRecorder.isTypeSupported === 'function') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 256000 };
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          options = { mimeType: 'audio/mp4' };
+        }
       }
 
       recorder = new MediaRecorder(stream, options);
@@ -354,6 +390,7 @@
       isRecording = false;
       recBtn.classList.remove('recording');
       recLabel.textContent = 'REC';
+      setStatus('Erro ao acessar microfone.', 3000);
     }
   }
 
@@ -500,7 +537,7 @@
     playhead.style.transform = `translateX(${210 + (pct * waveAreaWidth)}px)`;
   }
 
-  // ---------- Interface Paisagem ----------
+  // ---------- Interface ----------
   function renderTracks(){
     trackListEl.innerHTML = '';
     emptyMsg.style.display = tracks.length ? 'none' : 'block';
@@ -807,6 +844,8 @@
     offsetVal.textContent = latencyOffsetMs + ' ms';
   });
 
+  // Inicializa listagem ao carregar
+  refreshMicList();
   renderTracks();
 })();
 </script>
