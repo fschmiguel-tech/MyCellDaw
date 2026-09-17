@@ -21,7 +21,6 @@
     overscroll-behavior: none; width: 100vw; height: 100vh; overflow: hidden;
   }
 
-  /* FORÇAR ROTAÇÃO FÍSICA PARA MODO PAISAGEM APENAS EM DISPOSITIVOS MÓVEIS EM PÉ */
   @media screen and (orientation: portrait) and (max-width: 900px) {
     body {
       position: absolute;
@@ -34,9 +33,7 @@
     }
   }
 
-  body {
-    padding: 4px 8px; display: flex; flex-direction: column; gap: 4px;
-  }
+  body { padding: 4px 8px; display: flex; flex-direction: column; gap: 4px; }
 
   /* Topo Super Compacto */
   header {
@@ -48,7 +45,7 @@
 
   .transport-bar { display: flex; align-items: center; gap: 4px; width: 100%; justify-content: space-between; }
   .mic-select-row { display: flex; align-items: center; gap: 2px; }
-  .mic-select-row select { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; max-width: 130px; }
+  .mic-select-row select { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; max-width: 120px; }
   .mic-refresh-btn { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; cursor: pointer; }
 
   .rec-btn {
@@ -67,6 +64,7 @@
   }
   .btn-group button.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
   .btn-group button.ok { border-color: var(--ok); color: var(--ok); }
+  .btn-group button:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* Área Principal das Pistas */
   .tracks-container { position: relative; width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden; }
@@ -79,15 +77,12 @@
   }
   .playhead-line.recording-line { background: var(--accent); box-shadow: 0 0 6px rgba(255,84,112,0.8); }
 
-  /* Pistas Ajustadas */
   .track {
     display: grid; grid-template-columns: 210px 1fr; background: var(--card);
     border-radius: 4px; overflow: hidden; height: 68px; border: 1px solid transparent;
     transition: border-color 0.15s ease;
   }
-  .track.selected {
-    border-color: var(--accent2);
-  }
+  .track.selected { border-color: var(--accent2); }
 
   .track-controls {
     padding: 4px 6px; background: var(--card2); border-right: 1px solid var(--border);
@@ -119,13 +114,26 @@
   .nudge-btn { padding: 1px 4px; border-radius: 2px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 8.5px; cursor: pointer; height: 16px; line-height: 1; }
   .nudge-val { width: 34px; text-align: center; background: var(--card2); border: 1px solid var(--border); border-radius: 2px; color: var(--text); font-size: 8.5px; padding: 0; height: 16px; }
 
-  /* Área da Onda */
-  .waveform-wrapper {
-    width: 100%; height: 100%; background: #12141a; position: relative; overflow: hidden; display: flex; align-items: center;
-  }
+  .waveform-wrapper { width: 100%; height: 100%; background: #12141a; position: relative; overflow: hidden; display: flex; align-items: center; }
   .waveform-canvas { height: 100%; display: block; position: absolute; left: 0; top: 0; }
 
   .empty { text-align: center; color: var(--muted); font-size: 11px; padding: 12px; border: 1px dashed var(--border); border-radius: 6px; }
+
+  /* Modal de Efeitos */
+  .fx-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 200;
+  }
+  .fx-modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; width: 300px; display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .fx-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .fx-group { display: flex; flex-direction: column; gap: 4px; font-size: 10px; background: var(--card2); padding: 6px; border-radius: 4px; }
+  .fx-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .fx-row input { flex: 1; accent-color: var(--accent2); }
 
   .status { position: fixed; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 10px; color: var(--muted); pointer-events: none; z-index: 100; }
   .perm { background: var(--card2); border: 1px solid var(--border); border-radius: 6px; padding: 6px; font-size: 11px; color: var(--muted); text-align: center; }
@@ -155,6 +163,7 @@
     </div>
 
     <div class="btn-group">
+      <button id="fxBtn" id="fxBtn" disabled>🎛️ Efeitos</button>
       <button id="saveProjBtn">💾 Salvar</button>
       <button id="loadProjBtn">📂 Abrir</button>
       <input type="file" id="projFileInput" accept=".json" style="display:none;">
@@ -179,6 +188,41 @@
 </div>
 
 <div id="emptyMsg" class="empty">Nenhuma pista gravada. Clique em ➕ Pista ou em REC no topo.</div>
+
+<!-- Modal de Efeitos -->
+<div class="fx-modal-overlay" id="fxModal">
+  <div class="fx-modal">
+    <div class="fx-header">
+      <span id="fxModalTitle">🎛️ Efeitos da Pista</span>
+      <button id="closeFxBtn" style="background:none; border:none; color:var(--text); font-size:12px; cursor:pointer;">✖</button>
+    </div>
+    
+    <!-- Delay / Eco -->
+    <div class="fx-group">
+      <strong>Delay / Eco</strong>
+      <div class="fx-row">
+        <span>Tempo (ms):</span>
+        <input type="range" id="delayTime" min="0" max="1" step="0.05" value="0">
+        <span id="delayTimeVal">0ms</span>
+      </div>
+      <div class="fx-row">
+        <span>Repetições:</span>
+        <input type="range" id="delayFeedback" min="0" max="0.8" step="0.05" value="0">
+        <span id="delayFeedbackVal">0%</span>
+      </div>
+    </div>
+
+    <!-- Reverb -->
+    <div class="fx-group">
+      <strong>Reverb (Espaço)</strong>
+      <div class="fx-row">
+        <span>Intensidade:</span>
+        <input type="range" id="reverbMix" min="0" max="1" step="0.05" value="0">
+        <span id="reverbMixVal">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="status" id="statusMsg"></div>
 
@@ -219,7 +263,15 @@
   const projFileInput = document.getElementById('projFileInput');
   const micSelect = document.getElementById('micSelect');
   const micRefreshBtn = document.getElementById('micRefreshBtn');
+  const fxBtn = document.getElementById('fxBtn');
+  const fxModal = document.getElementById('fxModal');
+  const closeFxBtn = document.getElementById('closeFxBtn');
   let selectedMicId = '';
+
+  // Controles de Efeitos
+  const delayTimeInput = document.getElementById('delayTime');
+  const delayFeedbackInput = document.getElementById('delayFeedback');
+  const reverbMixInput = document.getElementById('reverbMix');
 
   function setStatus(msg, timeout){
     statusMsg.textContent = msg;
@@ -252,11 +304,7 @@
 
   async function ensureMic(){
     if(mediaStream) return mediaStream;
-    
-    let constraints = { 
-      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-      channelCount: 1
-    };
+    let constraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
     if(selectedMicId) constraints.deviceId = { exact: selectedMicId };
 
     try {
@@ -271,7 +319,6 @@
         throw err2;
       }
     }
-
     permBox.style.display = 'none';
     refreshMicList();
     return mediaStream;
@@ -290,40 +337,30 @@
         micSelect.innerHTML = '<option value="">Mic Padrão</option>';
         return;
       }
-
       const devices = await navigator.mediaDevices.enumerateDevices();
       const mics = devices.filter(d => d.kind === 'audioinput');
       const prevValue = micSelect.value;
-
       micSelect.innerHTML = '';
       if(mics.length === 0){
         micSelect.innerHTML = '<option value="">Sem Mic Conectado</option>';
         return;
       }
-
       mics.forEach((d, i)=>{
         const opt = document.createElement('option');
         opt.value = d.deviceId;
         opt.textContent = d.label || ('Microfone ' + (i+1));
         micSelect.appendChild(opt);
       });
-
       if([...micSelect.options].some(o=>o.value === prevValue)) {
         micSelect.value = prevValue;
       } else {
         selectedMicId = micSelect.value;
       }
-    }catch(e){
-      micSelect.innerHTML = '<option value="">Mic Padrão</option>';
-    }
+    }catch(e){ micSelect.innerHTML = '<option value="">Mic Padrão</option>'; }
   }
 
   micSelect.addEventListener('change', ()=>{ selectedMicId = micSelect.value; releaseMic(); });
-  micRefreshBtn.addEventListener('click', async ()=>{
-    releaseMic();
-    try { await ensureMic(); } catch(e){}
-    await refreshMicList();
-  });
+  micRefreshBtn.addEventListener('click', async ()=>{ releaseMic(); try { await ensureMic(); } catch(e){} await refreshMicList(); });
   permBtn.addEventListener('click', async ()=>{ await ensureMic(); });
 
   function createPanNode(ctx, panVal){
@@ -346,9 +383,7 @@
   }
 
   // ---------- Criar Pista Vazia ----------
-  addTrackBtn.addEventListener('click', ()=>{
-    createNewTrack(null);
-  });
+  addTrackBtn.addEventListener('click', ()=>{ createNewTrack(null); });
 
   function createNewTrack(buffer = null){
     trackCounter++;
@@ -356,8 +391,8 @@
       id: 'trk' + trackCounter,
       name: 'Pista ' + trackCounter,
       buffer: buffer,
-      volume: 1, pan: 0,
-      offsetMs: 0,
+      volume: 1, pan: 0, offsetMs: 0,
+      fx: { delayTime: 0, delayFeedback: 0, reverbMix: 0 },
       muted: false, playing: false, armed: false
     };
     tracks.push(track);
@@ -408,7 +443,6 @@
 
       setStatus('Gravando...', null);
     }catch(err){
-      console.error(err);
       isRecording = false;
       recBtn.classList.remove('recording');
       recLabel.textContent = 'REC';
@@ -450,7 +484,7 @@
       const armedTrack = tracks.find(t => t.armed);
       if(armedTrack){
         armedTrack.buffer = audioBuffer;
-        armedTrack.armed = false; // Desarma após gravar
+        armedTrack.armed = false;
         selectedTrackId = armedTrack.id;
       } else {
         createNewTrack(audioBuffer);
@@ -459,12 +493,11 @@
       renderTracks();
       setStatus('Pista gravada!', 2000);
     }catch(err){
-      console.error(err);
       setStatus('Erro ao processar gravação.', 3000);
     }
   }
 
-  // ---------- Playback & Playhead ----------
+  // ---------- Playback & Playhead (Com Processamento de FX) ----------
   function calculateMaxDuration(){
     const validTracks = tracks.filter(t => t.buffer !== null);
     if(validTracks.length === 0) return 0;
@@ -477,12 +510,8 @@
     let startAtCtxTime = when;
     let bufferOffsetSec = 0;
 
-    if (offsetSec >= 0) {
-      startAtCtxTime = when + offsetSec;
-    } else {
-      bufferOffsetSec = Math.abs(offsetSec);
-      if (bufferOffsetSec >= track.buffer.duration) return;
-    }
+    if (offsetSec >= 0) { startAtCtxTime = when + offsetSec; } 
+    else { bufferOffsetSec = Math.abs(offsetSec); if (bufferOffsetSec >= track.buffer.duration) return; }
 
     const src = audioCtx.createBufferSource();
     src.buffer = track.buffer;
@@ -491,14 +520,30 @@
     gain.gain.value = track.volume;
 
     const pan = createPanNode(audioCtx, track.pan);
-    src.connect(gain).connect(pan.input);
+
+    // Cadeia de Efeitos (Delay)
+    let lastNode = src;
+    if(track.fx.delayTime > 0){
+      const delayNode = audioCtx.createDelay();
+      delayNode.delayTime.value = track.fx.delayTime;
+      const feedbackNode = audioCtx.createGain();
+      feedbackNode.gain.value = track.fx.delayFeedback;
+
+      lastNode.connect(delayNode);
+      delayNode.connect(feedbackNode);
+      feedbackNode.connect(delayNode);
+      
+      const fxMerger = audioCtx.createGain();
+      lastNode.connect(fxMerger);
+      delayNode.connect(fxMerger);
+      lastNode = fxMerger;
+    }
+
+    lastNode.connect(gain).connect(pan.input);
     pan.output.connect(audioCtx.destination);
 
-    if (bufferOffsetSec > 0) {
-      src.start(startAtCtxTime, bufferOffsetSec);
-    } else {
-      src.start(startAtCtxTime);
-    }
+    if (bufferOffsetSec > 0) { src.start(startAtCtxTime, bufferOffsetSec); } 
+    else { src.start(startAtCtxTime); }
     
     track.source = src; track.gainNode = gain; track.pannerNode = pan; track.playing = true;
     src.onended = ()=>{ track.playing = false; updateTrackDots(); };
@@ -542,13 +587,10 @@
   function updatePlaybackPlayhead(){
     if(!isPlayingAll) return;
     const elapsed = audioCtx.currentTime - playStartCtxTime;
-    
     if(elapsed > maxProjectDuration){ stopAllPlayback(); return; }
-
     const pct = Math.min(1, elapsed / maxProjectDuration);
     const waveAreaWidth = trackListEl.clientWidth - 210;
     playhead.style.transform = `translateX(${210 + (pct * waveAreaWidth)}px)`;
-
     animFrameId = requestAnimationFrame(updatePlaybackPlayhead);
   }
 
@@ -559,11 +601,45 @@
     playhead.style.transform = `translateX(${210 + (pct * waveAreaWidth)}px)`;
   }
 
+  // ---------- Modal e Controle de Efeitos ----------
+  fxBtn.addEventListener('click', ()=>{
+    const currentTrack = tracks.find(t => t.id === selectedTrackId);
+    if(!currentTrack) return;
+
+    document.getElementById('fxModalTitle').textContent = `🎛️ Efeitos: ${currentTrack.name}`;
+    delayTimeInput.value = currentTrack.fx.delayTime;
+    document.getElementById('delayTimeVal').textContent = Math.round(currentTrack.fx.delayTime * 1000) + 'ms';
+    
+    delayFeedbackInput.value = currentTrack.fx.delayFeedback;
+    document.getElementById('delayFeedbackVal').textContent = Math.round(currentTrack.fx.delayFeedback * 100) + '%';
+    
+    fxModal.style.display = 'flex';
+  });
+
+  closeFxBtn.addEventListener('click', ()=>{ fxModal.style.display = 'none'; });
+
+  delayTimeInput.addEventListener('input', (e)=>{
+    const val = parseFloat(e.target.value);
+    document.getElementById('delayTimeVal').textContent = Math.round(val * 1000) + 'ms';
+    const currentTrack = tracks.find(t => t.id === selectedTrackId);
+    if(currentTrack) currentTrack.fx.delayTime = val;
+  });
+
+  delayFeedbackInput.addEventListener('input', (e)=>{
+    const val = parseFloat(e.target.value);
+    document.getElementById('delayFeedbackVal').textContent = Math.round(val * 100) + '%';
+    const currentTrack = tracks.find(t => t.id === selectedTrackId);
+    if(currentTrack) currentTrack.fx.delayFeedback = val;
+  });
+
   // ---------- Interface ----------
   function renderTracks(){
     trackListEl.innerHTML = '';
     emptyMsg.style.display = tracks.length ? 'none' : 'block';
     maxProjectDuration = calculateMaxDuration();
+
+    // Habilita/Desabilita botão de efeitos conforme seleção
+    fxBtn.disabled = !selectedTrackId;
 
     tracks.forEach((track)=>{
       const el = document.createElement('div');
@@ -612,7 +688,6 @@
         </div>
       `;
 
-      // Seleção da Pista ao clicar no painel da esquerda
       const controlsArea = el.querySelector('.track-controls');
       controlsArea.addEventListener('click', (e)=>{
         if(!e.target.closest('button') && !e.target.closest('input')){
@@ -621,12 +696,11 @@
         }
       });
 
-      // Botão R (Armar Pista)
       el.querySelector('.arm-btn').addEventListener('click', (e)=>{
         e.stopPropagation();
         const willArm = !track.armed;
-        tracks.forEach(t => t.armed = false); // Desarma todas
-        track.armed = willArm; // Arma a atual
+        tracks.forEach(t => t.armed = false);
+        track.armed = willArm;
         selectedTrackId = track.id;
         renderTracks();
       });
@@ -708,7 +782,6 @@
     ctx.fillRect(0, 0, width, height);
 
     if(!track.buffer){
-      // Linha central indicando pista vazia
       ctx.strokeStyle = '#2b2f3a';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -744,7 +817,7 @@
     for(let t of tracks){
       const wavBlob = t.buffer ? audioBufferToWav(t.buffer) : null;
       const base64 = wavBlob ? await blobToBase64(wavBlob) : null;
-      projectData.tracks.push({ name: t.name, volume: t.volume, pan: t.pan, offsetMs: t.offsetMs, audioBase64: base64 });
+      projectData.tracks.push({ name: t.name, volume: t.volume, pan: t.pan, offsetMs: t.offsetMs, fx: t.fx, audioBase64: base64 });
     }
 
     const jsonStr = JSON.stringify(projectData);
@@ -772,7 +845,8 @@
           tracks.push({
             id: 'trk' + trackCounter, name: tData.name || ('Pista ' + trackCounter),
             buffer: audioBuf, volume: tData.volume ?? 1, pan: tData.pan ?? 0,
-            offsetMs: tData.offsetMs ?? 0, muted: false, playing: false, armed: false
+            offsetMs: tData.offsetMs ?? 0, fx: tData.fx || { delayTime:0, delayFeedback:0, reverbMix:0 },
+            muted: false, playing: false, armed: false
           });
         }
         renderTracks(); setStatus('Projeto carregado!', 2500);
@@ -900,7 +974,6 @@
     return new Blob([arrBuf], {type:'audio/wav'});
   }
 
-  // Inicializa listagem ao carregar
   refreshMicList();
   renderTracks();
 })();
