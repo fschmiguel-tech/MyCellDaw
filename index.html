@@ -35,7 +35,6 @@
 
   body { padding: 4px 8px; display: flex; flex-direction: column; gap: 4px; }
 
-  /* Topo Super Compacto */
   header {
     display: flex; align-items: center; justify-content: space-between; gap: 6px;
     background: var(--card); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border);
@@ -66,7 +65,6 @@
   .btn-group button.ok { border-color: var(--ok); color: var(--ok); }
   .btn-group button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Área Principal das Pistas */
   .tracks-container { position: relative; width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden; }
   .tracks { display: flex; flex-direction: column; gap: 2px; background: var(--border); border-radius: 6px; padding: 2px; border: 1px solid var(--border); }
 
@@ -119,7 +117,7 @@
 
   .empty { text-align: center; color: var(--muted); font-size: 11px; padding: 12px; border: 1px dashed var(--border); border-radius: 6px; }
 
-  /* Modal de Efeitos */
+  /* Modal de Efeitos com Abas */
   .fx-modal-overlay {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background: rgba(0,0,0,0.7); backdrop-filter: blur(3px);
@@ -127,11 +125,18 @@
   }
   .fx-modal {
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px; width: 360px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+    padding: 12px; width: 340px; display: flex; flex-direction: column; gap: 10px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   }
   .fx-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-  .fx-group { display: flex; flex-direction: column; gap: 4px; font-size: 10px; background: var(--card2); padding: 6px; border-radius: 4px; }
+  
+  .fx-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .fx-tab-btn { flex: 1; padding: 4px; font-size: 9.5px; font-weight: 600; background: var(--card2); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; text-align: center; }
+  .fx-tab-btn.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+  .fx-tab-content { display: none; flex-direction: column; gap: 6px; background: var(--card2); padding: 8px; border-radius: 4px; font-size: 10px; }
+  .fx-tab-content.active { display: flex; }
+
   .fx-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .fx-row input { flex: 1; accent-color: var(--accent2); }
 
@@ -189,7 +194,7 @@
 
 <div id="emptyMsg" class="empty">Nenhuma pista gravada. Clique em ➕ Pista ou em REC no topo.</div>
 
-<!-- Modal de Efeitos -->
+<!-- Modal de Efeitos com Seleção por Abas -->
 <div class="fx-modal-overlay" id="fxModal">
   <div class="fx-modal">
     <div class="fx-header">
@@ -197,9 +202,15 @@
       <button id="closeFxBtn" style="background:none; border:none; color:var(--text); font-size:12px; cursor:pointer;">✖</button>
     </div>
     
-    <!-- Equalizador Gráfico de 7 Bandas -->
-    <div class="fx-group">
-      <strong>Equalizador de 7 Bandas</strong>
+    <!-- Seletor de Efeito (Abas) -->
+    <div class="fx-tabs">
+      <button class="fx-tab-btn active" data-target="tabEq">Equalizador (7B)</button>
+      <button class="fx-tab-btn" data-target="tabDelay">Delay / Eco</button>
+      <button class="fx-tab-btn" data-target="tabReverb">Reverb</button>
+    </div>
+
+    <!-- Conteúdo 1: Equalizador -->
+    <div class="fx-tab-content active" id="tabEq">
       <div class="fx-row"><span>60 Hz:</span><input type="range" class="eq-band" data-index="0" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
       <div class="fx-row"><span>150 Hz:</span><input type="range" class="eq-band" data-index="1" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
       <div class="fx-row"><span>400 Hz:</span><input type="range" class="eq-band" data-index="2" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
@@ -209,9 +220,8 @@
       <div class="fx-row"><span>15 kHz:</span><input type="range" class="eq-band" data-index="6" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
     </div>
 
-    <!-- Delay / Eco -->
-    <div class="fx-group">
-      <strong>Delay / Eco</strong>
+    <!-- Conteúdo 2: Delay / Eco -->
+    <div class="fx-tab-content" id="tabDelay">
       <div class="fx-row">
         <span>Tempo (ms):</span>
         <input type="range" id="delayTime" min="0" max="1" step="0.05" value="0">
@@ -221,6 +231,15 @@
         <span>Repetições:</span>
         <input type="range" id="delayFeedback" min="0" max="0.8" step="0.05" value="0">
         <span id="delayFeedbackVal" style="width:30px; text-align:right;">0%</span>
+      </div>
+    </div>
+
+    <!-- Conteúdo 3: Reverb -->
+    <div class="fx-tab-content" id="tabReverb">
+      <div class="fx-row">
+        <span>Nível / Espaço:</span>
+        <input type="range" id="reverbMix" min="0" max="1" step="0.05" value="0">
+        <span id="reverbMixVal" style="width:30px; text-align:right;">0%</span>
       </div>
     </div>
   </div>
@@ -244,6 +263,7 @@
   let animFrameId = null;
   let playStartCtxTime = 0;
   let maxProjectDuration = 0;
+  let cachedReverbBuffer = null;
 
   const addTrackBtn = document.getElementById('addTrackBtn');
   const recBtn = document.getElementById('recBtn');
@@ -273,6 +293,7 @@
   const eqBandsFreqs = [60, 150, 400, 1000, 2400, 6000, 15000];
   const delayTimeInput = document.getElementById('delayTime');
   const delayFeedbackInput = document.getElementById('delayFeedback');
+  const reverbMixInput = document.getElementById('reverbMix');
 
   function setStatus(msg, timeout){
     statusMsg.textContent = msg;
@@ -383,6 +404,24 @@
     return { input, output: merger, set pan(v){ applyPan(v); } };
   }
 
+  // Sintetiza áudio de impulso para o Reverb
+  function buildImpulseResponse(ctx, duration = 2.0, decay = 2.0) {
+    if(cachedReverbBuffer) return cachedReverbBuffer;
+    const rate = ctx.sampleRate;
+    const length = rate * duration;
+    const impulse = ctx.createBuffer(2, length, rate);
+    const left = impulse.getChannelData(0);
+    const right = impulse.getChannelData(1);
+
+    for (let i = 0; i < length; i++) {
+      const n = i;
+      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
+      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
+    }
+    cachedReverbBuffer = impulse;
+    return impulse;
+  }
+
   // ---------- Criar Pista Vazia ----------
   addTrackBtn.addEventListener('click', ()=>{ createNewTrack(null); });
 
@@ -393,7 +432,7 @@
       name: 'Pista ' + trackCounter,
       buffer: buffer,
       volume: 1, pan: 0, offsetMs: 0,
-      fx: { eq: [0, 0, 0, 0, 0, 0, 0], delayTime: 0, delayFeedback: 0 },
+      fx: { eq: [0, 0, 0, 0, 0, 0, 0], delayTime: 0, delayFeedback: 0, reverbMix: 0 },
       muted: false, playing: false, armed: false
     };
     tracks.push(track);
@@ -498,7 +537,7 @@
     }
   }
 
-  // ---------- Playback com Equalizador de 7 Bandas e Delay ----------
+  // ---------- Playback com EQ, Delay e Reverb ----------
   function calculateMaxDuration(){
     const validTracks = tracks.filter(t => t.buffer !== null);
     if(validTracks.length === 0) return 0;
@@ -519,7 +558,7 @@
 
     let lastNode = src;
 
-    // 1. Equalizador de 7 Bandas
+    // 1. Equalizador 7 Bandas
     track.fx.eq.forEach((gainVal, i) => {
       if(gainVal !== 0){
         const filter = audioCtx.createBiquadFilter();
@@ -550,6 +589,24 @@
       lastNode.connect(fxMerger);
       delayNode.connect(fxMerger);
       lastNode = fxMerger;
+    }
+
+    // 3. Reverb
+    if(track.fx.reverbMix > 0){
+      const convolver = audioCtx.createConvolver();
+      convolver.buffer = buildImpulseResponse(audioCtx);
+
+      const dryGain = audioCtx.createGain();
+      const wetGain = audioCtx.createGain();
+
+      dryGain.gain.value = 1 - (track.fx.reverbMix * 0.5);
+      wetGain.gain.value = track.fx.reverbMix;
+
+      const revMerger = audioCtx.createGain();
+
+      lastNode.connect(dryGain).connect(revMerger);
+      lastNode.connect(convolver).connect(wetGain).connect(revMerger);
+      lastNode = revMerger;
     }
 
     const gain = audioCtx.createGain();
@@ -619,6 +676,18 @@
     playhead.style.transform = `translateX(${210 + (pct * waveAreaWidth)}px)`;
   }
 
+  // ---------- Navegação por Abas do Modal de FX ----------
+  document.querySelectorAll('.fx-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fx-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.fx-tab-content').forEach(c => c.classList.remove('active'));
+      
+      btn.classList.add('active');
+      const targetId = btn.getAttribute('data-target');
+      document.getElementById(targetId).classList.add('active');
+    });
+  });
+
   // ---------- Modal e Controle de Efeitos ----------
   fxBtn.addEventListener('click', ()=>{
     const currentTrack = tracks.find(t => t.id === selectedTrackId);
@@ -626,7 +695,7 @@
 
     document.getElementById('fxModalTitle').textContent = `🎛️ Efeitos: ${currentTrack.name}`;
     
-    // Preenche os 7 sliders do EQ
+    // EQ
     const eqSliders = document.querySelectorAll('.eq-band');
     const eqVals = document.querySelectorAll('.eq-val');
     eqSliders.forEach((slider, idx) => {
@@ -635,12 +704,16 @@
       eqVals[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
     });
 
+    // Delay
     delayTimeInput.value = currentTrack.fx.delayTime;
     document.getElementById('delayTimeVal').textContent = Math.round(currentTrack.fx.delayTime * 1000) + 'ms';
-    
     delayFeedbackInput.value = currentTrack.fx.delayFeedback;
     document.getElementById('delayFeedbackVal').textContent = Math.round(currentTrack.fx.delayFeedback * 100) + '%';
     
+    // Reverb
+    reverbMixInput.value = currentTrack.fx.reverbMix;
+    document.getElementById('reverbMixVal').textContent = Math.round(currentTrack.fx.reverbMix * 100) + '%';
+
     fxModal.style.display = 'flex';
   });
 
@@ -651,7 +724,6 @@
       const idx = parseInt(e.target.getAttribute('data-index'), 10);
       const val = parseInt(e.target.value, 10);
       e.target.nextElementSibling.textContent = (val > 0 ? '+' : '') + val + 'dB';
-      
       const currentTrack = tracks.find(t => t.id === selectedTrackId);
       if(currentTrack) currentTrack.fx.eq[idx] = val;
     });
@@ -669,6 +741,13 @@
     document.getElementById('delayFeedbackVal').textContent = Math.round(val * 100) + '%';
     const currentTrack = tracks.find(t => t.id === selectedTrackId);
     if(currentTrack) currentTrack.fx.delayFeedback = val;
+  });
+
+  reverbMixInput.addEventListener('input', (e)=>{
+    const val = parseFloat(e.target.value);
+    document.getElementById('reverbMixVal').textContent = Math.round(val * 100) + '%';
+    const currentTrack = tracks.find(t => t.id === selectedTrackId);
+    if(currentTrack) currentTrack.fx.reverbMix = val;
   });
 
   // ---------- Interface ----------
@@ -883,7 +962,7 @@
           tracks.push({
             id: 'trk' + trackCounter, name: tData.name || ('Pista ' + trackCounter),
             buffer: audioBuf, volume: tData.volume ?? 1, pan: tData.pan ?? 0,
-            offsetMs: tData.offsetMs ?? 0, fx: tData.fx || { eq: [0,0,0,0,0,0,0], delayTime:0, delayFeedback:0 },
+            offsetMs: tData.offsetMs ?? 0, fx: tData.fx || { eq: [0,0,0,0,0,0,0], delayTime:0, delayFeedback:0, reverbMix:0 },
             muted: false, playing: false, armed: false
           });
         }
