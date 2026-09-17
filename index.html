@@ -127,7 +127,7 @@
   }
   .fx-modal {
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px; width: 310px; display: flex; flex-direction: column; gap: 10px;
+    padding: 12px; width: 360px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   }
   .fx-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
@@ -197,19 +197,16 @@
       <button id="closeFxBtn" style="background:none; border:none; color:var(--text); font-size:12px; cursor:pointer;">✖</button>
     </div>
     
-    <!-- Filtros / Equalizador -->
+    <!-- Equalizador Gráfico de 7 Bandas -->
     <div class="fx-group">
-      <strong>Equalização / Filtros</strong>
-      <div class="fx-row">
-        <span>Grave (Bass):</span>
-        <input type="range" id="eqLow" min="-12" max="12" step="1" value="0">
-        <span id="eqLowVal" style="width:30px; text-align:right;">0dB</span>
-      </div>
-      <div class="fx-row">
-        <span>Agudo (Treble):</span>
-        <input type="range" id="eqHigh" min="-12" max="12" step="1" value="0">
-        <span id="eqHighVal" style="width:30px; text-align:right;">0dB</span>
-      </div>
+      <strong>Equalizador de 7 Bandas</strong>
+      <div class="fx-row"><span>60 Hz:</span><input type="range" class="eq-band" data-index="0" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>150 Hz:</span><input type="range" class="eq-band" data-index="1" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>400 Hz:</span><input type="range" class="eq-band" data-index="2" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>1 kHz:</span><input type="range" class="eq-band" data-index="3" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>2.4 kHz:</span><input type="range" class="eq-band" data-index="4" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>6 kHz:</span><input type="range" class="eq-band" data-index="5" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
+      <div class="fx-row"><span>15 kHz:</span><input type="range" class="eq-band" data-index="6" min="-12" max="12" step="1" value="0"><span class="eq-val" style="width:30px; text-align:right;">0dB</span></div>
     </div>
 
     <!-- Delay / Eco -->
@@ -273,9 +270,7 @@
   const closeFxBtn = document.getElementById('closeFxBtn');
   let selectedMicId = '';
 
-  // Controles de Efeitos
-  const eqLowInput = document.getElementById('eqLow');
-  const eqHighInput = document.getElementById('eqHigh');
+  const eqBandsFreqs = [60, 150, 400, 1000, 2400, 6000, 15000];
   const delayTimeInput = document.getElementById('delayTime');
   const delayFeedbackInput = document.getElementById('delayFeedback');
 
@@ -398,7 +393,7 @@
       name: 'Pista ' + trackCounter,
       buffer: buffer,
       volume: 1, pan: 0, offsetMs: 0,
-      fx: { eqLow: 0, eqHigh: 0, delayTime: 0, delayFeedback: 0 },
+      fx: { eq: [0, 0, 0, 0, 0, 0, 0], delayTime: 0, delayFeedback: 0 },
       muted: false, playing: false, armed: false
     };
     tracks.push(track);
@@ -503,7 +498,7 @@
     }
   }
 
-  // ---------- Playback com Processamento de EQ e Delay ----------
+  // ---------- Playback com Equalizador de 7 Bandas e Delay ----------
   function calculateMaxDuration(){
     const validTracks = tracks.filter(t => t.buffer !== null);
     if(validTracks.length === 0) return 0;
@@ -524,24 +519,21 @@
 
     let lastNode = src;
 
-    // 1. Filtros / EQ (Low-shelf e High-shelf)
-    if(track.fx.eqLow !== 0){
-      const lowFilter = audioCtx.createBiquadFilter();
-      lowFilter.type = 'lowshelf';
-      lowFilter.frequency.value = 250;
-      lowFilter.gain.value = track.fx.eqLow;
-      lastNode.connect(lowFilter);
-      lastNode = lowFilter;
-    }
+    // 1. Equalizador de 7 Bandas
+    track.fx.eq.forEach((gainVal, i) => {
+      if(gainVal !== 0){
+        const filter = audioCtx.createBiquadFilter();
+        if(i === 0) filter.type = 'lowshelf';
+        else if(i === 6) filter.type = 'highshelf';
+        else filter.type = 'peaking';
 
-    if(track.fx.eqHigh !== 0){
-      const highFilter = audioCtx.createBiquadFilter();
-      highFilter.type = 'highshelf';
-      highFilter.frequency.value = 4000;
-      highFilter.gain.value = track.fx.eqHigh;
-      lastNode.connect(highFilter);
-      lastNode = highFilter;
-    }
+        filter.frequency.value = eqBandsFreqs[i];
+        filter.gain.value = gainVal;
+        
+        lastNode.connect(filter);
+        lastNode = filter;
+      }
+    });
 
     // 2. Delay / Eco
     if(track.fx.delayTime > 0){
@@ -634,11 +626,14 @@
 
     document.getElementById('fxModalTitle').textContent = `🎛️ Efeitos: ${currentTrack.name}`;
     
-    eqLowInput.value = currentTrack.fx.eqLow;
-    document.getElementById('eqLowVal').textContent = (currentTrack.fx.eqLow > 0 ? '+' : '') + currentTrack.fx.eqLow + 'dB';
-
-    eqHighInput.value = currentTrack.fx.eqHigh;
-    document.getElementById('eqHighVal').textContent = (currentTrack.fx.eqHigh > 0 ? '+' : '') + currentTrack.fx.eqHigh + 'dB';
+    // Preenche os 7 sliders do EQ
+    const eqSliders = document.querySelectorAll('.eq-band');
+    const eqVals = document.querySelectorAll('.eq-val');
+    eqSliders.forEach((slider, idx) => {
+      const val = currentTrack.fx.eq[idx] || 0;
+      slider.value = val;
+      eqVals[idx].textContent = (val > 0 ? '+' : '') + val + 'dB';
+    });
 
     delayTimeInput.value = currentTrack.fx.delayTime;
     document.getElementById('delayTimeVal').textContent = Math.round(currentTrack.fx.delayTime * 1000) + 'ms';
@@ -651,18 +646,15 @@
 
   closeFxBtn.addEventListener('click', ()=>{ fxModal.style.display = 'none'; });
 
-  eqLowInput.addEventListener('input', (e)=>{
-    const val = parseInt(e.target.value, 10);
-    document.getElementById('eqLowVal').textContent = (val > 0 ? '+' : '') + val + 'dB';
-    const currentTrack = tracks.find(t => t.id === selectedTrackId);
-    if(currentTrack) currentTrack.fx.eqLow = val;
-  });
-
-  eqHighInput.addEventListener('input', (e)=>{
-    const val = parseInt(e.target.value, 10);
-    document.getElementById('eqHighVal').textContent = (val > 0 ? '+' : '') + val + 'dB';
-    const currentTrack = tracks.find(t => t.id === selectedTrackId);
-    if(currentTrack) currentTrack.fx.eqHigh = val;
+  document.querySelectorAll('.eq-band').forEach(slider => {
+    slider.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'), 10);
+      const val = parseInt(e.target.value, 10);
+      e.target.nextElementSibling.textContent = (val > 0 ? '+' : '') + val + 'dB';
+      
+      const currentTrack = tracks.find(t => t.id === selectedTrackId);
+      if(currentTrack) currentTrack.fx.eq[idx] = val;
+    });
   });
 
   delayTimeInput.addEventListener('input', (e)=>{
@@ -891,7 +883,7 @@
           tracks.push({
             id: 'trk' + trackCounter, name: tData.name || ('Pista ' + trackCounter),
             buffer: audioBuf, volume: tData.volume ?? 1, pan: tData.pan ?? 0,
-            offsetMs: tData.offsetMs ?? 0, fx: tData.fx || { eqLow:0, eqHigh:0, delayTime:0, delayFeedback:0 },
+            offsetMs: tData.offsetMs ?? 0, fx: tData.fx || { eq: [0,0,0,0,0,0,0], delayTime:0, delayFeedback:0 },
             muted: false, playing: false, armed: false
           });
         }
