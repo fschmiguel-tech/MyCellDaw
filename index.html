@@ -120,9 +120,6 @@
 
   .empty { text-align: center; color: var(--muted); font-size: 11px; padding: 12px; border: 1px dashed var(--border); border-radius: 6px; }
 
-  .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--card); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 10px; flex-shrink: 0; }
-  .settings-row input { accent-color: var(--accent2); flex: 1; max-width: 180px; height: 12px; }
-
   .status { position: fixed; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 10px; color: var(--muted); pointer-events: none; z-index: 100; }
   .perm { background: var(--card2); border: 1px solid var(--border); border-radius: 6px; padding: 6px; font-size: 11px; color: var(--muted); text-align: center; }
   .perm button { margin-top: 4px; padding: 2px 8px; border-radius: 4px; border: none; background: var(--accent2); color: #fff; font-weight: 600; font-size: 10px; }
@@ -171,11 +168,6 @@
 
 <div id="emptyMsg" class="empty">Nenhuma pista gravada. Toque em REC no topo.</div>
 
-<div class="settings-row">
-  <span>Compensação Global de Latência: <strong id="offsetVal">0 ms</strong></span>
-  <input type="range" id="offsetSlider" min="-1000" max="1000" value="0" step="10">
-</div>
-
 <div class="status" id="statusMsg"></div>
 
 <script>
@@ -189,7 +181,6 @@
   let isRecording = false;
   let timerInterval = null;
   let recordStartWall = 0;
-  let latencyOffsetMs = 0;
   let isPlayingAll = false;
   let animFrameId = null;
   let playStartCtxTime = 0;
@@ -203,8 +194,6 @@
   const playAllBtn = document.getElementById('playAllBtn');
   const stopAllBtn = document.getElementById('stopAllBtn');
   const playhead = document.getElementById('playhead');
-  const offsetSlider = document.getElementById('offsetSlider');
-  const offsetVal = document.getElementById('offsetVal');
   const statusMsg = document.getElementById('statusMsg');
   const permBox = document.getElementById('permBox');
   const permBtn = document.getElementById('permBtn');
@@ -250,7 +239,6 @@
   async function ensureMic(){
     if(mediaStream) return mediaStream;
     
-    // Tenta primeiro com configurações otimizadas
     let constraints = { 
       echoCancellation: false, noiseSuppression: false, autoGainControl: false,
       channelCount: 1
@@ -260,13 +248,12 @@
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
     } catch(err1) {
-      // Fallback para PC: tenta acessar o áudio básico do sistema
       try {
         const basicConstraints = selectedMicId ? { audio: { deviceId: { exact: selectedMicId } } } : { audio: true };
         mediaStream = await navigator.mediaDevices.getUserMedia(basicConstraints);
       } catch(err2) {
         permBox.style.display = 'block';
-        permInstructions.textContent = 'Nenhum microfone encontrado no PC ou permissão negada.';
+        permInstructions.textContent = 'Nenhum microfone encontrado ou permissão negada.';
         throw err2;
       }
     }
@@ -431,7 +418,7 @@
         name: 'Pista ' + trackCounter,
         buffer: audioBuffer,
         volume: 1, pan: 0,
-        offsetMs: latencyOffsetMs,
+        offsetMs: 0,
         muted: false, playing: false
       };
       tracks.push(track);
@@ -837,12 +824,6 @@
     }
     return new Blob([arrBuf], {type:'audio/wav'});
   }
-
-  // ---------- Controle de Latência Global ----------
-  offsetSlider.addEventListener('input', ()=>{
-    latencyOffsetMs = parseInt(offsetSlider.value, 10);
-    offsetVal.textContent = latencyOffsetMs + ' ms';
-  });
 
   // Inicializa listagem ao carregar
   refreshMicList();
