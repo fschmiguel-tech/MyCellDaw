@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Looper">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Looper Multitrack - Paisagem</title>
+<title>Looper Multitrack</title>
 <style>
   :root{
     --bg:#0f1115; --card:#1a1d24; --card2:#22262f; --text:#eef0f4; --muted:#9aa1af;
@@ -28,50 +28,38 @@
   html, body {
     margin: 0; padding: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    overscroll-behavior: none; width: 100vw; height: 100vh; overflow: hidden;
+    overscroll-behavior: none; width: 100%; height: 100%; overflow: hidden;
   }
 
-  @media screen and (orientation: portrait) and (max-width: 900px) {
-    body {
-      position: absolute;
-      width: 100vh !important;
-      height: 100vw !important;
-      transform: rotate(90deg);
-      transform-origin: top left;
-      top: 0;
-      left: 100vw;
-    }
-  }
-
-  body { padding: 4px 6px; display: flex; flex-direction: column; gap: 4px; }
+  body { padding: 4px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; }
 
   header {
-    background: var(--card); padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card); padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border);
     flex-shrink: 0; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
   }
   header::-webkit-scrollbar { display: none; }
 
   .transport-bar {
-    display: flex; align-items: center; gap: 4px; width: max-content; min-width: 100%; justify-content: space-between;
+    display: flex; align-items: center; gap: 6px; width: max-content; min-width: 100%; justify-content: space-between;
   }
 
   .mic-select-row { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-  .mic-select-row select { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 9.5px; max-width: 100px; }
-  .mic-refresh-btn { padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 9.5px; cursor: pointer; }
+  .mic-select-row select { padding: 3px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; max-width: 110px; }
+  .mic-refresh-btn { padding: 3px 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--card2); color: var(--text); font-size: 10px; cursor: pointer; }
 
   .rec-btn {
-    padding: 3px 6px; border-radius: 12px; border: none; background: var(--accent); color: #fff;
-    font-size: 9.5px; font-weight: 700; display: flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0;
+    padding: 4px 8px; border-radius: 12px; border: none; background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0;
   }
   .rec-btn.recording { background: #b8102f; animation: pulse 1.2s infinite; }
   @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(184,16,47,.4);} 70%{box-shadow:0 0 0 6px rgba(184,16,47,0);} 100%{box-shadow:0 0 0 0 rgba(184,16,47,0);} }
   
-  .timer { font-variant-numeric: tabular-nums; font-size: 10px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
+  .timer { font-variant-numeric: tabular-nums; font-size: 10.5px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
 
-  .btn-group { display: flex; gap: 2px; flex-shrink: 0; }
+  .btn-group { display: flex; gap: 3px; flex-shrink: 0; }
   .btn-group button, .btn-group label.file-btn {
-    padding: 3px 5px; border-radius: 4px; border: 1px solid var(--border);
-    background: var(--card2); color: var(--text); font-size: 9.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--card2); color: var(--text); font-size: 10px; font-weight: 600; cursor: pointer; white-space: nowrap;
     display: inline-flex; align-items: center; justify-content: center;
   }
   .btn-group button.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
@@ -1325,11 +1313,11 @@
   async function mixdownAndExport(stemsOnly){
     const validTracks = tracks.filter(t => t.buffer !== null);
     if(validTracks.length === 0){ setStatus('Grave ao menos uma pista com áudio.', 2500); return; }
-    setStatus('Mixando em estéreo com efeitos...', null);
+    setStatus('Mixando em estéreo...', null);
 
     await ensureAudioContext();
     const sampleRate = audioCtx.sampleRate;
-    const totalDurationSec = calculateMaxDuration() + 1.0; // Adiciona margem para a cauda de reverb/delay
+    const totalDurationSec = calculateMaxDuration() + 1.0;
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
     if(!stemsOnly){
