@@ -286,6 +286,7 @@
 </div>
 
 <div class="status" id="statusMsg"></div>
+<div style="position:fixed; bottom:2px; right:4px; font-size:8px; color:#555; pointer-events:none; z-index:999;">teste pan</div>
 
 <script>
 (function(){
@@ -440,6 +441,23 @@
 
   // Criador universal de Panorâmica (funciona em reprodução e exportação offline)
   function createPanNode(ctx, panVal){
+    // Preferimos o StereoPannerNode nativo: é o caminho corretamente
+    // suportado tanto no AudioContext (reprodução ao vivo) quanto no
+    // OfflineAudioContext (exportação/mixdown). A implementação manual
+    // anterior (gain L/R + ChannelMergerNode) podia ser sumida/achatada
+    // em mono durante o render offline em alguns navegadores, o que fazia
+    // o áudio exportado sair sempre centralizado mesmo com o pan ajustado.
+    if (typeof ctx.createStereoPanner === 'function'){
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = panVal || 0;
+      return {
+        input: panner,
+        output: panner,
+        set pan(v){ panner.pan.value = v; }
+      };
+    }
+
+    // Fallback manual (apenas para navegadores muito antigos sem StereoPannerNode)
     const input = ctx.createGain();
     const gainL = ctx.createGain();
     const gainR = ctx.createGain();
@@ -1333,6 +1351,11 @@
 
     if(!stemsOnly){
       const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+      try {
+        offlineCtx.destination.channelCount = 2;
+        offlineCtx.destination.channelCountMode = 'explicit';
+        offlineCtx.destination.channelInterpretation = 'speakers';
+      } catch(e){}
       validTracks.forEach(t => {
         if(!t.muted) playTrack(t, 0, 0, offlineCtx);
       });
@@ -1352,6 +1375,11 @@
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
     const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+    try {
+      offlineCtx.destination.channelCount = 2;
+      offlineCtx.destination.channelCountMode = 'explicit';
+      offlineCtx.destination.channelInterpretation = 'speakers';
+    } catch(e){}
     playTrack(track, 0, 0, offlineCtx);
 
     const renderedBuffer = await offlineCtx.startRendering();
