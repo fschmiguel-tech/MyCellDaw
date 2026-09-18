@@ -43,7 +43,7 @@
     }
   }
 
-  body { padding: 4px 8px; display: flex; flex-direction: column; gap: 4px; }
+  body { padding: 4px 6px; display: flex; flex-direction: column; gap: 4px; }
 
   header {
     background: var(--card); padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border);
@@ -189,10 +189,9 @@
     <div class="btn-group">
       <button id="addTrackBtn" style="background:var(--card2); border-color:var(--accent2); color:var(--accent2);">➕ Pista</button>
       
-      <!-- Label nativa direta para forçar o seletor de documentos do Android -->
       <label class="file-btn" style="border-color:var(--ok); color:var(--ok);">
         📥 Áudio
-        <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.bin" style="display:none;">
+        <input type="file" id="audioFileInput" accept=".mp3,.wav,.ogg,.m4a,.flac,.bin" style="display:none;">
       </label>
 
       <button id="recBtn" class="rec-btn">⏺ <span id="recLabel">REC</span></button>
@@ -439,6 +438,11 @@
   permBtn.addEventListener('click', async ()=>{ await ensureMic(); });
 
   function createPanNode(ctx, panVal){
+    if (ctx.createStereoPanner) {
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = panVal || 0;
+      return { input: panner, output: panner, set pan(v){ panner.pan.value = v; } };
+    }
     const input = ctx.createGain();
     const gainL = ctx.createGain();
     const gainR = ctx.createGain();
@@ -458,7 +462,7 @@
   }
 
   function buildImpulseResponse(ctx, duration = 2.0, decay = 2.0) {
-    if(cachedReverbBuffer) return cachedReverbBuffer;
+    if(cachedReverbBuffer && cachedReverbBuffer.sampleRate === ctx.sampleRate) return cachedReverbBuffer;
     const rate = ctx.sampleRate;
     const length = rate * duration;
     const impulse = ctx.createBuffer(2, length, rate);
@@ -470,7 +474,7 @@
       left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
       right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n / length, decay);
     }
-    cachedReverbBuffer = impulse;
+    if(ctx === audioCtx) cachedReverbBuffer = impulse;
     return impulse;
   }
 
@@ -654,8 +658,9 @@
     return Math.max(...validTracks.map(t => t.buffer.duration + (t.offsetMs/1000)));
   }
 
-  function playTrack(track, when, startFromSec = 0){
+  function playTrack(track, when, startFromSec = 0, targetCtx = audioCtx, destination = null){
     if(track.muted || !track.buffer) return;
+    const dest = destination || targetCtx.destination;
     const offsetSec = track.offsetMs / 1000;
     
     let trackEffectiveStart = offsetSec;
@@ -674,14 +679,14 @@
       bufferOffsetSec = startFromSec - trackEffectiveStart;
     }
 
-    const src = audioCtx.createBufferSource();
+    const src = targetCtx.createBufferSource();
     src.buffer = track.buffer;
 
     let lastNode = src;
 
     track.fx.eq.forEach((gainVal, i) => {
       if(gainVal !== 0){
-        const filter = audioCtx.createBiquadFilter();
+        const filter = targetCtx.createBiquadFilter();
         if(i === 0) filter.type = 'lowshelf';
         else if(i === 6) filter.type = 'highshelf';
         else filter.type = 'peaking';
@@ -695,59 +700,61 @@
     });
 
     if(track.fx.delayTime > 0){
-      const delayNode = audioCtx.createDelay();
+      const delayNode = targetCtx.createDelay();
       delayNode.delayTime.value = track.fx.delayTime;
-      const feedbackNode = audioCtx.createGain();
+      const feedbackNode = targetCtx.createGain();
       feedbackNode.gain.value = track.fx.delayFeedback;
 
       lastNode.connect(delayNode);
       delayNode.connect(feedbackNode);
       feedbackNode.connect(delayNode);
       
-      const fxMerger = audioCtx.createGain();
-      const dryGate = audioCtx.createGain();
-      const wetGate = audioCtx.createGain();
+      const fxMerger = targetCtx.createGain();
+      const dryGate = targetCtx.createGain();
+      const wetGate = targetCtx.createGain();
 
       lastNode.connect(dryGate).connect(fxMerger);
       delayNode.connect(wetGate).connect(fxMerger);
 
-      applyRegionAutomation(audioCtx, wetGate, dryGate, track.fx.regions, startFromSec, when);
+      applyRegionAutomation(targetCtx, wetGate, dryGate, track.fx.regions, startFromSec, when);
 
       lastNode = fxMerger;
     }
 
     if(track.fx.reverbMix > 0){
-      const convolver = audioCtx.createConvolver();
-      convolver.buffer = buildImpulseResponse(audioCtx);
+      const convolver = targetCtx.createConvolver();
+      convolver.buffer = buildImpulseResponse(targetCtx);
 
-      const dryGain = audioCtx.createGain();
-      const wetGain = audioCtx.createGain();
+      const dryGain = targetCtx.createGain();
+      const wetGain = targetCtx.createGain();
 
       dryGain.gain.value = 1 - (track.fx.reverbMix * 0.5);
       wetGain.gain.value = track.fx.reverbMix;
 
-      const revMerger = audioCtx.createGain();
+      const revMerger = targetCtx.createGain();
 
       lastNode.connect(dryGain).connect(revMerger);
       lastNode.connect(convolver).connect(wetGain).connect(revMerger);
 
-      applyRegionAutomation(audioCtx, wetGain, dryGain, track.fx.regions, startFromSec, when);
+      applyRegionAutomation(targetCtx, wetGain, dryGain, track.fx.regions, startFromSec, when);
 
       lastNode = revMerger;
     }
 
-    const gain = audioCtx.createGain();
+    const gain = targetCtx.createGain();
     gain.gain.value = track.volume;
 
-    const pan = createPanNode(audioCtx, track.pan);
+    const pan = createPanNode(targetCtx, track.pan);
 
     lastNode.connect(gain).connect(pan.input);
-    pan.output.connect(audioCtx.destination);
+    pan.output.connect(dest);
 
     src.start(startAtCtxTime, bufferOffsetSec);
     
-    track.source = src; track.gainNode = gain; track.pannerNode = pan; track.playing = true;
-    src.onended = ()=>{ track.playing = false; updateTrackDots(); };
+    if(targetCtx === audioCtx){
+      track.source = src; track.gainNode = gain; track.pannerNode = pan; track.playing = true;
+      src.onended = ()=>{ track.playing = false; updateTrackDots(); };
+    }
   }
 
   function applyRegionAutomation(ctx, wetNode, dryNode, regions, startFromSec, when){
@@ -1318,40 +1325,20 @@
   async function mixdownAndExport(stemsOnly){
     const validTracks = tracks.filter(t => t.buffer !== null);
     if(validTracks.length === 0){ setStatus('Grave ao menos uma pista com áudio.', 2500); return; }
-    setStatus('Mixando em estéreo...', null);
+    setStatus('Mixando em estéreo com efeitos...', null);
 
-    const sampleRate = validTracks[0].buffer.sampleRate;
-    const totalDurationSec = calculateMaxDuration();
+    await ensureAudioContext();
+    const sampleRate = audioCtx.sampleRate;
+    const totalDurationSec = calculateMaxDuration() + 1.0; // Adiciona margem para a cauda de reverb/delay
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
     if(!stemsOnly){
-      const masterL = new Float32Array(totalSamples);
-      const masterR = new Float32Array(totalSamples);
-
+      const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
       validTracks.forEach(t => {
-        if(t.muted) return;
-        const monoData = t.buffer.getChannelData(0);
-        const offsetSamples = Math.round((t.offsetMs / 1000) * sampleRate);
-
-        const panVal = t.pan || 0;
-        const angle = (panVal + 1) * 0.25 * Math.PI;
-        const gainL = Math.cos(angle) * t.volume;
-        const gainR = Math.sin(angle) * t.volume;
-        const phaseShiftR = (Math.abs(panVal) < 0.05) ? 1 : 0; 
-
-        for(let i = 0; i < monoData.length; i++){
-          const targetIdxL = i + offsetSamples;
-          const targetIdxR = i + offsetSamples + phaseShiftR;
-          const sample = monoData[i];
-
-          if(targetIdxL >= 0 && targetIdxL < totalSamples) masterL[targetIdxL] += sample * gainL;
-          if(targetIdxR >= 0 && targetIdxR < totalSamples) masterR[targetIdxR] += sample * gainR;
-        }
+        if(!t.muted) playTrack(t, 0, 0, offlineCtx);
       });
-
-      const stereoBuffer = audioCtx.createBuffer(2, totalSamples, sampleRate);
-      stereoBuffer.copyToChannel(masterL, 0); stereoBuffer.copyToChannel(masterR, 1);
-      downloadWav(audioBufferToWav(stereoBuffer), `mixagem-estereo-${Date.now()}.wav`);
+      const renderedBuffer = await offlineCtx.startRendering();
+      downloadWav(audioBufferToWav(renderedBuffer), `mixagem-estereo-${Date.now()}.wav`);
     } else {
       for(let t of validTracks){ await exportSingleTrack(t); }
     }
@@ -1360,32 +1347,16 @@
 
   async function exportSingleTrack(track){
     if(!track.buffer) return;
-    const sampleRate = track.buffer.sampleRate;
-    const totalDurationSec = track.buffer.duration + Math.max(0, track.offsetMs/1000);
+    await ensureAudioContext();
+    const sampleRate = audioCtx.sampleRate;
+    const totalDurationSec = track.buffer.duration + Math.max(0, track.offsetMs/1000) + 1.0;
     const totalSamples = Math.ceil(totalDurationSec * sampleRate);
 
-    const masterL = new Float32Array(totalSamples);
-    const masterR = new Float32Array(totalSamples);
-    const monoData = track.buffer.getChannelData(0);
-    const offsetSamples = Math.round((track.offsetMs / 1000) * sampleRate);
+    const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+    playTrack(track, 0, 0, offlineCtx);
 
-    const panVal = track.pan || 0;
-    const angle = (panVal + 1) * 0.25 * Math.PI;
-    const gainL = Math.cos(angle) * track.volume;
-    const gainR = Math.sin(angle) * track.volume;
-
-    for(let i = 0; i < monoData.length; i++){
-      const targetIdx = i + offsetSamples;
-      if(targetIdx >= 0 && targetIdx < totalSamples){
-        const sample = monoData[i];
-        masterL[targetIdx] += sample * gainL;
-        masterR[targetIdx] += sample * gainR;
-      }
-    }
-
-    const stereoBuffer = audioCtx.createBuffer(2, totalSamples, sampleRate);
-    stereoBuffer.copyToChannel(masterL, 0); stereoBuffer.copyToChannel(masterR, 1);
-    downloadWav(audioBufferToWav(stereoBuffer), `${track.name.toLowerCase().replace(/\s+/g,'-')}.wav`);
+    const renderedBuffer = await offlineCtx.startRendering();
+    downloadWav(audioBufferToWav(renderedBuffer), `${track.name.toLowerCase().replace(/\s+/g,'-')}.wav`);
   }
 
   function downloadWav(blob, filename){
@@ -1395,8 +1366,10 @@
   }
 
   function audioBufferToWav(buffer){
-    const numChannels = 2; const sampleRate = buffer.sampleRate;
-    const numFrames = buffer.length; const bytesPerSample = 2; 
+    const numChannels = buffer.numberOfChannels; 
+    const sampleRate = buffer.sampleRate;
+    const numFrames = buffer.length; 
+    const bytesPerSample = 2; 
     const blockAlign = numChannels * bytesPerSample;
     const dataSize = numFrames * blockAlign;
     const arrBuf = new ArrayBuffer(44 + dataSize);
@@ -1413,7 +1386,7 @@
     view.setUint32(40, dataSize, true);
 
     const channelL = buffer.getChannelData(0);
-    const channelR = buffer.getChannelData(1);
+    const channelR = numChannels > 1 ? buffer.getChannelData(1) : channelL;
 
     let offset = 44;
     for(let i = 0; i < numFrames; i++){
