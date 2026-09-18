@@ -31,23 +31,16 @@
     overscroll-behavior: none; width: 100vw; height: 100vh; overflow: hidden;
   }
 
-  /* Rotação forçada quando o celular estiver em pé (retrato).
-     Usamos variáveis CSS (--rot-w/--rot-h/--rot-left) que são preenchidas
-     via JavaScript com o tamanho REAL do viewport em pixels (window.innerWidth/innerHeight).
-     Isso evita o corte de itens que acontecia ao usar 100vw/100vh puros,
-     pois com o giro da tela BLOQUEADO alguns navegadores recalculam vw/vh
-     de forma inconsistente (por causa da barra de endereço/status), fazendo
-     a largura "de mentira" calculada ficar menor que o espaço real disponível.
-     Os valores 100vh/100vw abaixo são apenas um fallback até o JS rodar. */
+  /* Rotação forçada quando o celular estiver em pé (retrato) */
   @media screen and (orientation: portrait) {
     body {
       position: absolute;
-      width: var(--rot-w, 100vh) !important;
-      height: var(--rot-h, 100vw) !important;
+      width: 100vh !important;
+      height: 100vw !important;
       transform: rotate(90deg);
       transform-origin: top left;
       top: 0;
-      left: var(--rot-left, 100vw);
+      left: 100vw;
     }
   }
 
@@ -187,41 +180,6 @@
 </head>
 <body>
 
-<script>
-  // Corrige o corte de itens do menu quando o giro da tela está BLOQUEADO em modo paisagem.
-  // Em vez de confiar em 100vw/100vh (que alguns navegadores recalculam de forma
-  // inconsistente quando a orientação "real" do aparelho é retrato), medimos o
-  // viewport de verdade em pixels via JS e aplicamos esses valores nas variáveis
-  // CSS --rot-w / --rot-h / --rot-left usadas pela regra de rotação.
-  (function(){
-    function applyRotationFix(){
-      var root = document.documentElement;
-      var isPortrait = window.matchMedia('(orientation: portrait)').matches;
-      if (isPortrait) {
-        var w = window.innerWidth;
-        var h = window.innerHeight;
-        root.style.setProperty('--rot-w', h + 'px');
-        root.style.setProperty('--rot-h', w + 'px');
-        root.style.setProperty('--rot-left', w + 'px');
-      } else {
-        root.style.removeProperty('--rot-w');
-        root.style.removeProperty('--rot-h');
-        root.style.removeProperty('--rot-left');
-      }
-    }
-    applyRotationFix();
-    window.addEventListener('resize', applyRotationFix);
-    window.addEventListener('orientationchange', function(){
-      // Alguns navegadores reportam innerWidth/innerHeight antigos por um instante
-      // logo após o evento orientationchange, então recalculamos de novo pouco depois.
-      applyRotationFix();
-      setTimeout(applyRotationFix, 150);
-      setTimeout(applyRotationFix, 400);
-    });
-    document.addEventListener('DOMContentLoaded', applyRotationFix);
-  })();
-</script>
-
 <header>
   <div class="transport-bar">
     <div class="mic-select-row">
@@ -328,7 +286,7 @@
 </div>
 
 <div class="status" id="statusMsg"></div>
-<div style="position:fixed; bottom:2px; right:4px; font-size:8px; color:#555; pointer-events:none; z-index:999;">teste giro</div>
+<div style="position:fixed; bottom:2px; right:4px; font-size:8px; color:#555; pointer-events:none; z-index:999;">teste pan</div>
 
 <script>
 (function(){
